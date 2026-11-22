@@ -1,0 +1,16 @@
+{
+  "_aide": "Serveur et clé vides = serveurs publics RustDesk. Pour ton propre serveur plus tard : remplis les deux (valeurs données par installer-serveur.sh) et relance la compilation.",
+
+  "serveur": "",
+  "cle_publique": "",
+
+  "nom_application": "KryciaDesk",
+  "organisation": "fr.krycia",
+  "entreprise": "Krycia Informatique",
+  "description": "KryciaDesk - Assistance à distance Krycia",
+  "copyright": "Copyright © 2026 Krycia Informatique. Basé sur RustDesk (AGPL-3.0).",
+  "couleur_principale": "#1565D8",
+
+  "masquer_reglages_serveur": true,
+  "desactiver_mises_a_jour_rustdesk": true
+}
