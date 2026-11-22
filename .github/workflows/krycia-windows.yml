@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# KryciaDesk - compilation Windows x64
+# KryciaDesk - compilation Windows
 # Généré par krycia/generer-workflow.py à partir de flutter-build.yml (RustDesk).
 # Lancement : onglet Actions > "KryciaDesk - Windows" > Run workflow.
 # Durée : ~45-70 min. Résultat : artefact + release "krycia".
@@ -113,7 +113,7 @@ jobs:
       - name: Appliquer la marque Krycia
         shell: bash
         run: |
-          pip3 install pillow
+          python3 -m pip install pillow || python3 -m pip install --break-system-packages pillow
           python3 krycia/rebrand.py
 
       - name: Restore bridge files
