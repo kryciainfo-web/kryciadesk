@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Génère .github/workflows/krycia-windows.yml à partir du workflow officiel
-.github/workflows/flutter-build.yml de RustDesk (Windows x64 uniquement),
+Génère, à partir du workflow officiel .github/workflows/flutter-build.yml de RustDesk :
+  - .github/workflows/krycia-windows.yml  (Windows x64 -> .exe)
+  - .github/workflows/krycia-macos.yml    (Mac Intel + Apple Silicon -> .dmg)
 en y ajoutant l'étape de rebranding Krycia.
 
 A relancer depuis la racine du dépôt après chaque mise à jour du fork :
@@ -69,20 +70,26 @@ topmost = drop_matrix_entry(strip_needs_validate(job_block("build-RustDeskTempTo
                             "windows-11-arm")
 win = drop_matrix_entry(job_block("build-for-windows-flutter"), "aarch64-pc-windows-msvc")
 
-# Étape de rebranding juste après le checkout
-co = next(i for i, l in enumerate(win) if l.strip() == "- name: Checkout source code")
-end = co + 1
-while end < len(win) and not win[end].strip().startswith("- name:"):
-    end += 1
-rebrand = [
+REBRAND = [
     "      - name: Appliquer la marque Krycia",
     "        shell: bash",
     "        run: |",
-    "          pip3 install pillow",
+    "          python3 -m pip install pillow || python3 -m pip install --break-system-packages pillow",
     "          python3 krycia/rebrand.py",
     "",
 ]
-win = win[:end] + rebrand + win[end:]
+
+
+def add_rebrand(block):
+    """Insère l'étape de rebranding juste après le checkout."""
+    co = next(i for i, l in enumerate(block) if l.strip() == "- name: Checkout source code")
+    end = co + 1
+    while end < len(block) and not block[end].strip().startswith("- name:"):
+        end += 1
+    return block[:end] + REBRAND + block[end:]
+
+
+win = add_rebrand(win)
 
 # On garde tout jusqu'à « Build self-extracted executable » inclus, sans les étapes de signature
 # RustDesk (secrets officiels), puis on ajoute nos étapes de sortie.
@@ -119,13 +126,16 @@ win += [
     "",
 ]
 
-header = f"""# ---------------------------------------------------------------------------
-# {APP} - compilation Windows x64
+
+
+def header(platform, duree):
+    return f"""# ---------------------------------------------------------------------------
+# {APP} - compilation {platform}
 # Généré par krycia/generer-workflow.py à partir de flutter-build.yml (RustDesk).
-# Lancement : onglet Actions > "{APP} - Windows" > Run workflow.
-# Durée : ~45-70 min. Résultat : artefact + release "krycia".
+# Lancement : onglet Actions > "{APP} - {platform}" > Run workflow.
+# Durée : {duree}. Résultat : artefact + release "krycia".
 # ---------------------------------------------------------------------------
-name: {APP} - Windows
+name: {APP} - {platform}
 
 on:
   workflow_dispatch:
@@ -144,6 +154,25 @@ env:
   PUBLISH_UPDATE_METADATA: "false"
   SIGN_BASE_URL: "-2"
 """
-out = header + "\n".join(env) + "\n\njobs:\n" + "\n".join(bridge + topmost + win) + "\n"
-DST.write_text(out, encoding="utf-8", newline="\n")
-print(f"{DST} généré ({len(out.splitlines())} lignes).")
+
+
+def write(dst, platform, duree, jobs):
+    out = header(platform, duree) + "\n".join(env) + "\n\njobs:\n" + "\n".join(jobs) + "\n"
+    dst.write_text(out, encoding="utf-8", newline="\n")
+    print(f"{dst} généré ({len(out.splitlines())} lignes).")
+
+
+write(DST, "Windows", "~45-70 min", bridge + topmost + win)
+
+# --- macOS (Intel + Apple Silicon), .dmg non signé ---
+mac = add_rebrand(job_block("build-for-macOS"))
+mac = [l.replace("RustDesk.app/Contents/MacOS/RustDesk", f"{APP}.app/Contents/MacOS/{APP}")
+        .replace("RustDesk.app", f"{APP}.app")
+        .replace("rustdesk-${{ env.VERSION }}", "${{ env.APP_FILE }}-${{ env.VERSION }}")
+        .replace('"rustdesk-${VERSION}', '"${APP_FILE}-${VERSION}')
+        .replace("rustdesk*-${{ matrix.job.arch }}.dmg", "${{ env.APP_FILE }}-*-${{ matrix.job.arch }}.dmg")
+        .replace("prerelease: true", "prerelease: false")
+       for l in mac]
+if not any(f"{APP}.app" in l for l in mac):
+    sys.exit("build-for-macOS : chemin RustDesk.app introuvable, le workflow officiel a changé.")
+write(DST.with_name("krycia-macos.yml"), "macOS", "~40-60 min", bridge + mac)

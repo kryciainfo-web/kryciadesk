@@ -89,7 +89,6 @@ def main() -> None:
                  "(git submodule update --init).")
     c = load_conf()
     name = c.get("nom_application", "KryciaDesk")
-    org = c.get("organisation", "fr.krycia")
     company = c.get("entreprise", "Krycia Informatique")
     desc = c.get("description", f"{name} - Assistance à distance")
     copy = c.get("copyright", f"Copyright © {company}. Basé sur RustDesk (AGPL-3.0).")
@@ -116,7 +115,8 @@ def main() -> None:
         ]
     cfg_rules += [
         (r'(pub static ref APP_NAME: RwLock<String> = RwLock::new\(")[^"]*(")', rf'\g<1>{name}\g<2>'),
-        (r'(pub static ref ORG: RwLock<String> = RwLock::new\(")[^"]*(")', rf'\g<1>{rs(org)}\g<2>'),
+        # ORG volontairement inchangé (com.carriez) : sur Mac, install.scpt et macos.rs
+        # utilisent "com.carriez" en dur pour les plists et le dossier de préférences.
     ]
     if builtin:
         cfg_rules.append((
@@ -151,12 +151,24 @@ def main() -> None:
         (rf'(const Text\(\s*")(?:RustDesk|{name})(",)', rf'\g<1>{name}\g<2>'),
     ])
 
-    # 4. Couleur d'accent de l'interface
+    # 4. macOS : nom du bundle (.app), copyright, chemins de build
+    patch("flutter/macos/Runner/Configs/AppInfo.xcconfig", [
+        (r'^(PRODUCT_NAME = ).*$', rf'\g<1>{name}'),
+        (r'^(PRODUCT_COPYRIGHT = ).*$', rf'\g<1>{copy}'),
+    ])
+    patch("flutter/macos/Runner.xcodeproj/project.pbxproj", [
+        (rf'\b(?:RustDesk|{name})\.app\b', f'{name}.app'),
+    ])
+    patch("build.py", [
+        (rf'(Products/Release/)(?:RustDesk|{name})(\.app/Contents/MacOS/)', rf'\g<1>{name}\g<2>'),
+    ])
+
+    # 5. Couleur d'accent de l'interface
     patch("flutter/lib/common.dart", [
         (r'(static const Color accent = Color\(0xFF)[0-9A-Fa-f]{6}(\);)', rf'\g<1>{color}\g<2>'),
     ])
 
-    # 5. Icônes et logo
+    # 6. Icônes et logo
     make_icons()
 
     if errors:
@@ -203,6 +215,9 @@ def make_icons() -> None:
     png("res/128x128.png", 128)
     png("res/128x128@2x.png", 256)
     png("flutter/assets/icon.png", 256)  # petite icône de la barre d'onglets
+    icns = ROOT / "flutter/macos/Runner/AppIcon.icns"
+    sq.resize((1024, 1024), Image.LANCZOS).save(icns, format="ICNS")
+    print("  ok  flutter/macos/Runner/AppIcon.icns")
 
     # Logo de la page d'accueil : on garde les proportions (logo large accepté)
     if LOGO_FILE.exists():
